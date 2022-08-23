@@ -2,7 +2,6 @@ package com.arkconcepts.cameraserve;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.os.Bundle;
@@ -17,7 +16,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -29,22 +27,24 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private Camera camera;
     private boolean previewRunning = false;
     private int camId = 0;
-    private ByteArrayOutputStream previewStream = new ByteArrayOutputStream();
     private int rotationSteps = 0;
     private boolean aboveLockScreen = true;
 
     private static SsdpAdvertiser ssdpAdvertiser = new SsdpAdvertiser();
     private static Thread ssdpThread = new Thread(ssdpAdvertiser);
+
     private static MjpegServer mjpegServer = new MjpegServer();
     private static Thread serverThread = new Thread(mjpegServer);
-    private static HashMap<Integer, List<Camera.Size>> cameraSizes = new HashMap<>();
-    private static ReentrantReadWriteLock frameLock = new ReentrantReadWriteLock();
-    private static byte[] jpegFrame;
 
-    public static byte[] getJpegFrame() {
+    private static HashMap<Integer, List<Camera.Size>> cameraSizes = new HashMap<>();
+
+    private static ReentrantReadWriteLock frameLock = new ReentrantReadWriteLock();
+    private static YuvImage yuvImage;
+
+    public static YuvImage getYuvFrame() {
         try {
             frameLock.readLock().lock();
-            return jpegFrame;
+            return yuvImage;
         } finally {
             frameLock.readLock().unlock();
         }
@@ -54,10 +54,10 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
         return cameraSizes;
     }
 
-    private static void setJpegFrame(ByteArrayOutputStream stream) {
+    private static void setFrame(YuvImage image) {
         try {
             frameLock.writeLock().lock();
-            jpegFrame = stream.toByteArray();
+            yuvImage = image;
         } finally {
             frameLock.writeLock().unlock();
         }
@@ -231,13 +231,12 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void onPreviewFrame(byte[] bytes, Camera camera) {
-        previewStream.reset();
         Camera.Parameters p = camera.getParameters();
 
-        int previewHeight = p.getPreviewSize().height,
-            previewWidth = p.getPreviewSize().width;
+        int previewHeight = p.getPreviewSize().height;
+        int previewWidth = p.getPreviewSize().width;
 
-        switch(rotationSteps) {
+        switch (rotationSteps) {
             case 1:
                 bytes = Rotator.rotateYUV420Degree90(bytes, previewWidth, previewHeight);
                 break;
@@ -256,10 +255,14 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
         }
 
         int format = p.getPreviewFormat();
-        new YuvImage(bytes, format, previewWidth, previewHeight, null)
-                .compressToJpeg(new Rect(0, 0, previewWidth, previewHeight),
-                        100, previewStream);
+        YuvImage image = new YuvImage(
+                bytes,
+                format,
+                previewWidth,
+                previewHeight,
+                null
+        );
 
-        setJpegFrame(previewStream);
+        setFrame(image);
     }
 }

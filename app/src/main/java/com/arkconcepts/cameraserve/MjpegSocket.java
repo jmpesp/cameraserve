@@ -1,5 +1,8 @@
 package com.arkconcepts.cameraserve;
 
+import android.graphics.Rect;
+import android.graphics.YuvImage;
+
 import java.io.DataOutputStream;
 import java.net.Socket;
 
@@ -30,13 +33,26 @@ public class MjpegSocket implements Runnable {
                     "--" + boundary + "\r\n").getBytes());
             stream.flush();
 
-            while(true) {
-                byte[] frame = MainActivity.getJpegFrame();
+            while (true) {
+                YuvImage image = MainActivity.getYuvFrame();
+
+                // Approximate, it seems like over-estimating is ok
+                int[] strides = image.getStrides();
+                int length = image.getHeight() * image.getWidth();
+                for (int stride : strides) {
+                    length *= stride;
+                }
 
                 stream.write(("Content-type: image/jpeg\r\n" +
-                        "Content-Length: " + frame.length + "\r\n" +
+                        "Content-Length: " + length + "\r\n" +
                         "\r\n").getBytes());
-                stream.write(frame);
+
+                image.compressToJpeg(
+                        new Rect(0, 0, image.getWidth(), image.getHeight()),
+                        100,
+                        stream
+                );
+
                 stream.write(("\r\n--" + boundary + "\r\n").getBytes());
             }
 
