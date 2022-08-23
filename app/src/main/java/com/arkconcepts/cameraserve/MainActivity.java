@@ -144,7 +144,17 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     private void openCamAndPreview() {
         try {
-            if (camera == null) camera = Camera.open(camId);
+            if (camera == null) {
+                camera = Camera.open(camId);
+
+                // If the camera supports it, continuous auto focus
+                Camera.Parameters params = camera.getParameters();
+                if (params.getSupportedFocusModes().contains(
+                        Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+                    params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+                }
+                camera.setParameters(params);
+            }
             startPreview();
         } catch (Exception e) {
             e.printStackTrace();
